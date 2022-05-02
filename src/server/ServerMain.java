@@ -6,7 +6,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RunnableFuture;
 import java.util.logging.Logger;
 
 public class ServerMain {
@@ -14,7 +13,7 @@ public class ServerMain {
 
     private List<Connection> connections = new LinkedList();
 
-    final ExecutorService executor = Executors.newFixedThreadPool(2); // Q1: Explain why 1 thread won't work
+    final ExecutorService executor = Executors.newFixedThreadPool(3); // Q1: Explain why 1 thread won't work
     public void start(final int port) throws IOException {
 
         serverSocket = new ServerSocket(port);
@@ -23,7 +22,7 @@ public class ServerMain {
             public void run() {
                 try {
                     while (true) {
-                        Connection c = new Connection(serverSocket.accept());
+                        Connection c = new Connection(ServerMain.this, serverSocket.accept(), logger);
                         connections.add(c);
                         logger.info("New incoming connection");
                         executor.execute(c);
@@ -41,50 +40,6 @@ public class ServerMain {
             c.stop();
         }
         executor.shutdownNow();
-    }
-
-    private class Connection implements Runnable {
-        private PrintWriter out;
-        private BufferedReader in;
-        private Socket clientSocket;
-
-        public Connection(Socket clientSocket) throws IOException {
-            this.clientSocket = clientSocket;
-            out = new PrintWriter(clientSocket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        }
-
-        @Override
-        public void run() {
-            try {
-                String greeting;
-                logger.info("Waiting for incoming message");
-                while ((greeting = in.readLine()) != null) {
-                    logger.info("Incoming message: '" + greeting + "'");
-                    if ("hello server".equals(greeting)) {
-                        out.println("hello client");
-                    } else {
-                        out.println("unrecognised greeting");
-                    }
-
-                    logger.info("Waiting for next incoming message");
-                }
-            } catch (IOException e) {
-                logger.info("Client closed");
-                try {
-                    stop();
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                }
-            }
-        }
-
-        public void stop() throws IOException {
-            in.close();
-            out.close();
-            clientSocket.close();
-            serverSocket.close();
-        }
     }
 
     public static void main(String[] args) throws IOException {
