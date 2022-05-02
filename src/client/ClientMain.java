@@ -19,6 +19,11 @@ public class ClientMain {
         logger.info("Connected to " + ip + ":" + port);
     }
 
+    public void sendNonTerminatedMessage(String msg) {
+        out.print(msg);
+        out.flush();
+    }
+
     public String sendMessage(String msg) throws IOException {
         out.println(msg);
         String resp = in.readLine();

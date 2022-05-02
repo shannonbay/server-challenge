@@ -2,8 +2,8 @@ package server;
 
 import java.net.*;
 import java.io.*;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -11,9 +11,10 @@ import java.util.logging.Logger;
 public class ServerMain {
     private ServerSocket serverSocket;
 
-    private List<Connection> connections = new LinkedList();
+    private ConcurrentMap<Connection, Boolean> connections = new ConcurrentHashMap<Connection, Boolean>();
 
-    final ExecutorService executor = Executors.newFixedThreadPool(3); // Q1: Explain why 1 thread won't work
+    private final ExecutorService executor = Executors.newFixedThreadPool(2); // Q1: Explain why 1 thread won't work
+
     public void start(final int port) throws IOException {
 
         serverSocket = new ServerSocket(port);
@@ -23,20 +24,35 @@ public class ServerMain {
                 try {
                     while (true) {
                         Connection c = new Connection(ServerMain.this, serverSocket.accept(), logger);
-                        connections.add(c);
-                        logger.info("New incoming connection");
-                        executor.execute(c);
-                    }
+                        connections.put(c, false);
+                   }
                 } catch (IOException e) {
                     logger.severe("No longer accepting connections");
                 }
             }
         });
 
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                while(true) {
+                    for(Connection c: connections.keySet()) {
+                        if(connections.replace(c, false, true)) {
+                            logger.finest("Processing connection " + c);
+                            c.run();
+                            connections.replace(c, true, false);
+                            logger.finest("Finished processing connection " + c);
+                        }
+                    }
+                }
+            }
+        });
+
+        logger.info("Finished booting server");
     }
 
     public void stop() throws IOException {
-        for(Connection c: connections) {
+        for(Connection c: connections.keySet()) {
             c.stop();
         }
         executor.shutdownNow();

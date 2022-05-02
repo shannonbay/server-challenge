@@ -1,16 +1,16 @@
 package server;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Logger;
 
 class Connection implements Runnable {
     private ServerMain serverMain;
     private PrintWriter out;
-    private BufferedReader in;
+    private InputStream in;
     private Socket clientSocket;
     private Logger logger;
 
@@ -19,24 +19,37 @@ class Connection implements Runnable {
         this.clientSocket = clientSocket;
         this.logger = logger;
         out = new PrintWriter(clientSocket.getOutputStream(), true);
-        in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        in = clientSocket.getInputStream();
     }
+
+    private StringBuffer s = new StringBuffer();
 
     @Override
     public void run() {
         try {
-            String greeting;
-            logger.info("Waiting for incoming message");
-            while ((greeting = in.readLine()) != null) {
-                logger.info("Incoming message: '" + greeting + "'");
-                if ("hello server".equals(greeting)) {
+            logger.finest("Waiting for incoming message");
+
+            int available = in.available();
+            if(available <= 0) return;
+
+            byte[] buf = new byte[available];
+            in.read(buf);
+
+            s.append(new String(buf, StandardCharsets.UTF_8));
+
+            if(buf[available - 1] == '\n') { //check for complete line
+                logger.info("Incoming message: '" + s + "'");
+                if ("hello server\n".equals(s.toString())) {
                     out.println("hello client");
                 } else {
-                    out.println("unrecognised greeting");
+                    out.println("unrecognised greeting: "+ s);
                 }
-
-                logger.info("Waiting for next incoming message");
+                s.setLength(0);
+            } else {
+                logger.info("Received incomplete message: " + s);
             }
+
+            logger.info("Waiting for next incoming message");
         } catch (IOException e) {
             logger.info("Client closed");
             try {
