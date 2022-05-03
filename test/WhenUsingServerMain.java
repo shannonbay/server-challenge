@@ -8,11 +8,21 @@ import org.junit.Test;
 import server.ServerMain;
 
 import java.io.IOException;
+import java.net.ConnectException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RunnableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Logger;
 
 public class WhenUsingServerMain {
 
     ServerMain server=new ServerMain();
-    ClientMain client, client2;
+    ClientMain client, client2, client3;
 
     @BeforeClass
     public static void setupClass(){
@@ -26,6 +36,7 @@ public class WhenUsingServerMain {
 
         client = new ClientMain();
         client2 = new ClientMain();
+        client3 = new ClientMain();
     }
 
     @Test
@@ -34,11 +45,11 @@ public class WhenUsingServerMain {
         System.out.println("Creating client");
         client.startConnection("127.0.0.1", 7777);
         System.out.println("Connected to server");
-        String response = client.sendMessage("hello server\n");
+        String response = client.sendMessage("hello server");
         System.out.println("Sent message");
         assertEquals("hello client", response);
 
-        response = client.sendMessage("hello server\n");
+        response = client.sendMessage("hello server");
         System.out.println("Sent message");
         assertEquals("hello client", response);
 
@@ -68,6 +79,49 @@ public class WhenUsingServerMain {
 
     }
 
+    @Test
+    public void count() throws IOException, InterruptedException, TimeoutException, ExecutionException {
+        logger.info("Creating client");
+        client.startConnection("127.0.0.1", 7777);
+        client2.startConnection("127.0.0.1", 7777);
+        System.out.println("Connected to server");
+
+        ExecutorService es = Executors.newFixedThreadPool(2);
+        Future<String> f = es.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                try {
+                    return client.sendMessage("count");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return null;
+            }
+        });
+        Future<String> f2 = es.submit(new Callable<String>() {
+            @Override
+            public String call() {
+                try {
+                    return client2.sendMessage("count");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return null;
+            }
+        });
+        String response = f.get(7, TimeUnit.SECONDS);
+        assertEquals("5 4 3 2 1 0 ", response);
+        logger.info("First count complete");
+        response = f2.get(1, TimeUnit.SECONDS);
+        assertEquals("5 4 3 2 1 0 ", response);
+        logger.info("Second count complete");
+        Thread.sleep(2000);
+
+        response = client.sendMessage("hello server");
+        System.out.println("Sent message on client 2");
+        assertEquals("hello client", response);
+    }
+
     @After
     public void stop() throws IOException {
         System.out.println("Shutting down server");
@@ -75,5 +129,8 @@ public class WhenUsingServerMain {
 
         client.stopConnection();
         client2.stopConnection();
+        client3.stopConnection();
     }
+
+    Logger logger = Logger.getLogger("test");
 }

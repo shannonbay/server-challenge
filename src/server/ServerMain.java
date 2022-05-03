@@ -6,14 +6,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.logging.Logger;
 
 public class ServerMain {
     private ServerSocket serverSocket;
 
+    // Boolean flag indicates if connection is currently being processed by a thread
     private ConcurrentMap<Connection, Boolean> connections = new ConcurrentHashMap<Connection, Boolean>();
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(2); // Q1: Explain why 1 thread won't work
+    private final ExecutorService executor = Executors.newFixedThreadPool(4); // Q1: Explain why 1 thread won't work
 
     public void start(final int port) throws IOException {
 
@@ -36,11 +38,21 @@ public class ServerMain {
             @Override
             public void run() {
                 while(true) {
-                    for(Connection c: connections.keySet()) {
+                    for(final Connection c: connections.keySet()) {
                         if(connections.replace(c, false, true)) {
                             logger.finest("Processing connection " + c);
-                            c.run();
-                            connections.replace(c, true, false);
+                            executor.submit(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if(c.call()) {
+                                        connections.remove(c);
+                                        logger.info("Removed ended connection");
+                                    } else {
+                                        connections.replace(c, true, false);
+                                    }
+                                }
+                            });
+
                             logger.finest("Finished processing connection " + c);
                         }
                     }
@@ -56,6 +68,9 @@ public class ServerMain {
             c.stop();
         }
         executor.shutdownNow();
+
+        serverSocket.close();
+        connections.clear();
     }
 
     public static void main(String[] args) throws IOException {
