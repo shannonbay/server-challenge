@@ -30,7 +30,7 @@ public class WhenUsingServerMain {
     }
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, InterruptedException {
         System.out.println("Creating server listen on port 7777");
         server.start(7777);
 
@@ -86,29 +86,25 @@ public class WhenUsingServerMain {
         client2.startConnection("127.0.0.1", 7777);
         System.out.println("Connected to server");
 
+        // submit two 6 second count commands simultaneously
         ExecutorService es = Executors.newFixedThreadPool(2);
-        Future<String> f = es.submit(new Callable<String>() {
-            @Override
-            public String call() {
-                try {
-                    return client.sendMessage("count");
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return null;
+        Future<String> f = es.submit(() -> {
+            try {
+                return client.sendMessage("count");
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+            return null;
         });
-        Future<String> f2 = es.submit(new Callable<String>() {
-            @Override
-            public String call() {
-                try {
-                    return client2.sendMessage("count");
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                return null;
+        Future<String> f2 = es.submit(() -> {
+            try {
+                return client2.sendMessage("count");
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+            return null;
         });
+
         String response = f.get(7, TimeUnit.SECONDS);
         assertEquals("5 4 3 2 1 0 ", response);
         logger.info("First count complete");

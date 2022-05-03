@@ -5,18 +5,18 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
-class Connection implements Callable<Boolean> {
-    private ServerMain serverMain;
+class Connection implements Runnable {
     private PrintWriter out;
     private InputStream in;
     private Socket clientSocket;
     private Logger logger;
 
-    public Connection(ServerMain serverMain, Socket clientSocket, Logger logger) throws IOException {
-        this.serverMain = serverMain;
+    public AtomicReference<ConnState> state = new AtomicReference<>(ConnState.waiting);
+
+    public Connection(Socket clientSocket, Logger logger) throws IOException {
         this.clientSocket = clientSocket;
         this.logger = logger;
         out = new PrintWriter(clientSocket.getOutputStream(), true);
@@ -29,12 +29,12 @@ class Connection implements Callable<Boolean> {
      *
      * @return true if connection closed
      */
-    public Boolean call() {
+    public void run() {
         try {
             logger.finest("Waiting for incoming message");
 
             int available = in.available();
-            if(available <= 0) return false;
+            if(available <= 0) return;
 
             byte[] buf = new byte[available];
             in.read(buf);
@@ -46,7 +46,7 @@ class Connection implements Callable<Boolean> {
                 if ("hello server\n".equals(s.toString())) {
                     out.println("hello client");
                 } else if("count\n".equals(s.toString())) {
-                    logger.info("Starting countdown");
+                    logger.info("Starting long countdown");
                     for(int i = 5; i >= 0; i--) {
                         out.print(i + " ");
                         out.flush();
@@ -70,17 +70,24 @@ class Connection implements Callable<Boolean> {
                 e1.printStackTrace();
             }
 
-            return true;
+            this.state.set(ConnState.closed);
+            return;
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
-        return false;
+        return;
     }
 
     public void stop() throws IOException {
         in.close();
         out.close();
         clientSocket.close();
+    }
+
+    public enum ConnState {
+        running,
+        waiting,
+        closed
     }
 }
