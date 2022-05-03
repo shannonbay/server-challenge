@@ -4,7 +4,6 @@ import java.net.*;
 import java.io.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -66,9 +65,9 @@ public class ServerMain {
                 for(final Connection c: connections) {
                     if(c.state.compareAndSet(Connection.ConnState.waiting, Connection.ConnState.running)) {
                         logger.finest("Processing connection " + c);
-                            CompletableFuture.runAsync(c, executor).thenRunAsync(
-                                () -> c.state.compareAndSet(Connection.ConnState.running, Connection.ConnState.waiting)
-                            );
+                        CompletableFuture.runAsync(c, executor).thenRunAsync(
+                            () -> c.state.compareAndSet(Connection.ConnState.running, Connection.ConnState.waiting)
+                        );
                         logger.finest("Finished processing connection " + c);
                     }
                 }
